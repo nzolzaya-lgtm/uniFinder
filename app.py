@@ -24,6 +24,144 @@ from uni_data import (
 
 st.set_page_config(page_title="University Finder", page_icon="🎓", layout="wide")
 
+# ---------------------------------------------------------------
+# 0. LOOK AND FEEL (one CSS block, theme-aware, works on phones)
+# ---------------------------------------------------------------
+st.markdown("""
+<style>
+/* ---- Edit these numbers to resize text across the whole app ---- */
+:root {
+  --result-size: 2.2rem;        /* the big numbers inside metric cards */
+  --result-label-size: 1.05rem; /* the label text above those numbers */
+  --caption-size: 1.05rem;      /* the small text under charts and tables */
+  --body-size: 1.05rem;         /* normal paragraph text */
+  --section-gap: 1.6rem;        /* space between sections */
+}
+
+/* Body text: a little larger and easier to read.
+   color: inherit keeps it readable in light and dark mode. */
+[data-testid="stAppViewContainer"] [data-testid="stMarkdown"] p,
+[data-testid="stAppViewContainer"] [data-testid="stMarkdown"] li {
+  font-size: var(--body-size);
+  line-height: 1.6;
+}
+
+/* Headings: title > section headings > result numbers > captions > table text */
+[data-testid="stAppViewContainer"] h1 {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.1rem;
+}
+[data-testid="stAppViewContainer"] h2 {
+  font-size: 1.6rem;
+  font-weight: 750;
+  line-height: 1.25;
+  margin-top: var(--section-gap);
+  margin-bottom: 0.5rem;
+}
+[data-testid="stAppViewContainer"] h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 1.1rem;
+}
+
+/* Friendly one-line subtitle under the title */
+[data-testid="stAppViewContainer"] .uf-subtitle {
+  font-size: 1.15rem;
+  line-height: 1.5;
+  opacity: 0.85;
+  margin: 0 0 1.2rem 0;
+}
+
+/* Metric cards: subtle card look using a theme-neutral grey, so they
+   look right on both a light and a dark background. */
+[data-testid="stMetric"] {
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  border-radius: 0.8rem;
+  padding: 0.85rem 1rem;
+  background: rgba(128, 128, 128, 0.07);
+  height: 100%;
+}
+
+/* Big result numbers: bold, and they wrap instead of ending in "..." */
+[data-testid="stMetricValue"],
+[data-testid="stMetricValue"] > div {
+  font-size: var(--result-size) !important;
+  font-weight: 800 !important;
+  line-height: 1.15 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere;
+  padding-bottom: 0.1rem;
+}
+
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p,
+[data-testid="stMetricLabel"] > div {
+  font-size: var(--result-label-size) !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere;
+}
+
+/* Captions under charts and tables: larger, readable, unaffected by theme */
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p,
+[data-testid="stAppViewContainer"] .stCaption p {
+  font-size: var(--caption-size) !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  color: inherit !important;
+  opacity: 0.85;
+  margin-top: 0.35rem;
+  margin-bottom: 1.3rem;
+}
+
+/* Breathing room around charts so a chart and its caption do not crowd */
+[data-testid="stAppViewContainer"] [data-testid="stPlotlyChart"] {
+  margin-bottom: 0.2rem;
+}
+[data-testid="stAppViewContainer"] hr {
+  margin: var(--section-gap) 0;
+}
+
+/* The highlighted "university you like" banner in the similarity tab */
+.st-key-liked_banner [data-testid="stAlert"],
+.st-key-liked_banner [data-testid="stAlert"] p {
+  font-size: 1.3rem !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+  white-space: normal !important;
+}
+
+/* Active tab label is bold */
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p {
+  font-weight: 700 !important;
+}
+
+/* Phones: smaller type so nothing is cut off or squeezed */
+@media (max-width: 640px) {
+  :root {
+    --result-size: 1.55rem;
+    --result-label-size: 0.95rem;
+    --caption-size: 0.98rem;
+    --body-size: 1rem;
+    --section-gap: 1.1rem;
+  }
+  [data-testid="stAppViewContainer"] h1 { font-size: 1.9rem; }
+  [data-testid="stAppViewContainer"] h2 { font-size: 1.35rem; }
+  [data-testid="stMetric"] { padding: 0.6rem 0.7rem; }
+  .st-key-liked_banner [data-testid="stAlert"] p { font-size: 1.1rem !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
 METRICS = {
     "ar_score": "Academic reputation",
     "er_score": "Employer reputation",
@@ -264,6 +402,8 @@ top_n = st.sidebar.slider("How many results", 5, 30, 10)
 # 4. HEADER
 # ---------------------------------------------------------------
 st.title("🎓 University Finder")
+st.markdown('<p class="uf-subtitle">Find universities that fit what you care about, and save the ones you like.</p>',
+            unsafe_allow_html=True)
 st.markdown("**Question:** Given what a student cares about and where they want to study, "
             "which universities are the best match, and which ones are similar to a university they already like?")
 
@@ -286,7 +426,7 @@ with tab1:
             top = results.head(top_n)
             c1, c2, c3 = st.columns(3)
             c1.metric("Universities that match your filters", f"{len(results):,}")
-            c2.metric("Best match", top.iloc[0]["institution"][:32])
+            c2.metric("Best match", top.iloc[0]["institution"])
             c3.metric("Countries in your top results", top["country"].nunique())
 
             left, right = st.columns([3, 2])
@@ -297,11 +437,13 @@ with tab1:
                          labels={"match_score": "Match score (0-100)", "institution": ""})
             fig.update_layout(coloraxis_showscale=False)
             left.plotly_chart(fig, width="stretch")
-            left.caption("The match score is the average of the metrics you care about, weighted by your sliders.")
+            left.caption("The **match score** is the average of the metrics you care about, "
+                         "weighted by your sliders.")
 
             if len(top) >= 3:
                 right.plotly_chart(radar(top.head(3), "Your top 3: score on each metric"), width="stretch")
-                right.caption("A larger shape means a higher score. Look for the metrics you care about most.")
+                right.caption("A **larger shape** means a **higher score**. Look for the metrics "
+                             "you care about most.")
 
             show = top[["institution", "country", "rank_label", "size_label",
                         "focus_label", "match_score"]].rename(columns={
@@ -319,15 +461,16 @@ with tab1:
                           color_continuous_scale="Blues", title="Countries among your 50 best matches",
                           labels={"universities": "Universities in top 50", "avg_match": "Average match"})
             st.plotly_chart(fig2, width="stretch")
-            st.caption("Shows which countries have the most universities that fit your preferences.")
+            st.caption("Shows which **countries** have the **most universities** that fit your "
+                       "preferences.")
 
 # ---------------------------------------------------------------
 # TAB 2: UNIVERSITY FINDER (ADMISSIONS)
 # ---------------------------------------------------------------
 with tab_uni:
-    st.markdown("Check your **SAT and IELTS scores** against admission requirements and keep only "
-                "universities inside your **annual tuition budget**. The first tab matches you on "
-                "academic reputation; this tab answers where you can realistically apply.")
+    st.markdown("Check your **SAT and IELTS scores** and your **tuition budget** against real "
+                "admission requirements. The first tab matches your interests; this one shows "
+                "where you can realistically apply.")
 
     with st.expander("Data source"):
         use_live = st.checkbox("Use live data from the US College Scorecard API (US only)",
@@ -353,12 +496,12 @@ with tab_uni:
                        "Showing the built-in sample dataset instead.")
             uni_df = sample_universities()
         else:
-            st.caption(f"Live source: {len(uni_df):,} SAT-reporting US universities from the "
+            st.caption(f"Live source: **{len(uni_df):,} SAT-reporting US universities** from the "
                        "College Scorecard.")
     else:
         uni_df = sample_universities()
-        st.caption(f"Built-in sample: {len(uni_df)} universities in "
-                   f"{uni_df['country'].nunique()} countries.")
+        st.caption(f"Built-in sample: **{len(uni_df)} universities** in "
+                   f"**{uni_df['country'].nunique()} countries**.")
 
     s1, s2, s3 = st.columns(3)
     sat_score = s1.slider("SAT overall score", 400, 1600, 1300, step=10, key="uf_sat")
@@ -453,16 +596,16 @@ with tab_uni:
                 "website_url": st.column_config.LinkColumn("Website", display_text="Visit site"),
             },
         )
-        st.caption("Sorted by annual tuition, cheapest first. Click a column header to re-sort. "
-                   "A dash means the requirement is not published.")
+        st.caption("Sorted by **annual tuition**, cheapest first. Click a column header to "
+                   "re-sort. A **dash (-)** means the requirement is not published.")
 
 # ---------------------------------------------------------------
 # TAB 3: REQUIREMENT LOOKUP (GROQ)
 # ---------------------------------------------------------------
 with tab_req:
-    st.markdown("Look up a university's **SAT and IELTS requirements, annual tuition and "
-                "acceptance rate**. Groq extracts the numbers from the model's knowledge; "
-                "without an API key the app searches its bundled offline database instead.")
+    st.markdown("Look up a university's **SAT and IELTS requirements, tuition and acceptance "
+                "rate**. Groq extracts the numbers; without an API key the app uses its bundled "
+                "offline database.")
 
     has_api_key = bool(get_api_key())
     with st.form("requirement_lookup"):
@@ -479,10 +622,10 @@ with tab_req:
     active_query = st.session_state.get("req_active_query", "")
 
     if has_api_key:
-        st.caption(f"Using Groq `{GROQ_MODEL}` in JSON mode; answers are cached for 24 hours.")
+        st.caption(f"Using Groq `{GROQ_MODEL}` in JSON mode; answers are **cached for 24 hours**.")
     else:
-        st.caption("No `GROQ_API_KEY` found, so the bundled offline database is used. Add the "
-                   "key to `.streamlit/secrets.toml` or your environment to extract any "
+        st.caption("No `GROQ_API_KEY` found, so the **bundled offline database** is used. Add the "
+                   "key to `.streamlit/secrets.toml` or your environment to look up any "
                    "university.")
 
     if not active_query:
@@ -557,8 +700,8 @@ with tab_req:
 # TAB 4: SIMILAR
 # ---------------------------------------------------------------
 with tab2:
-    st.markdown("Pick a university you like. The app compares the scores of all 9 metrics "
-                "and finds the universities with the most similar profile (cosine similarity).")
+    st.markdown("Pick a university you like. The app compares all **9 metric scores** and finds "
+                "the most similar profiles (cosine similarity).")
     names = df.sort_values("rank_num")["institution"].tolist()
     default = names.index("Seoul National University") if "Seoul National University" in names else 0
     liked = st.selectbox("University you like", names, index=default)
@@ -578,7 +721,8 @@ with tab2:
     out = out.sort_values("similarity", ascending=False).head(sim_n)
 
     row = df.loc[idx]
-    st.info(f"**{row['institution']}**  |  {row['country']}  |  QS rank {row['rank_label']}")
+    with st.container(key="liked_banner"):
+        st.info(f"**{row['institution']}**  |  {row['country']}  |  QS rank **{row['rank_label']}**")
 
     if out.empty:
         st.warning("No universities found with these filters.")
@@ -590,11 +734,11 @@ with tab2:
                       color="similarity", color_continuous_scale="Purples")
         figs.update_layout(coloraxis_showscale=False)
         l.plotly_chart(figs, width="stretch")
-        l.caption("Similarity compares the shape of the scores, not the level, so a lower-ranked "
-                  "university can still be a close match.")
+        l.caption("**Similarity** compares the **shape of the scores**, not the level, so a "
+                  "lower-ranked university can still be a close match.")
         compare = pd.concat([df.loc[[idx]], out.head(2)])
         r.plotly_chart(radar(compare, "Your university vs its 2 closest matches"), width="stretch")
-        r.caption("Shapes that overlap closely show universities with a similar profile.")
+        r.caption("**Shapes that overlap closely** show universities with a similar profile.")
         st.dataframe(out[["institution", "country", "rank_label", "size_label", "similarity"]].rename(
             columns={"institution": "University", "country": "Country", "rank_label": "QS rank",
                      "size_label": "Size", "similarity": "Similarity"}),
@@ -606,8 +750,8 @@ with tab2:
 # TAB 5: MY SAVED UNIVERSITIES
 # ---------------------------------------------------------------
 with tab_saved:
-    st.markdown("Universities you saved from the finder and the similarity search. "
-                "Every account has its own list.")
+    st.markdown("Your saved universities from the finder and the similarity search. "
+                "**Each account keeps its own list.**")
 
     saved_user = st.session_state.get("user")
     saved_flash = st.session_state.pop("saved_flash", None)
@@ -645,7 +789,7 @@ with tab_saved:
                 "Score": st.column_config.NumberColumn(
                     format="%.1f", help="Match score, or similarity for similar universities."),
             })
-            st.caption(f"{len(table)} saved universities, newest first.")
+            st.caption(f"**{len(table)} saved universities**, newest first.")
 
             st.subheader("Edit a note or remove a university")
             chosen = st.selectbox("Saved university", saved["institution"].tolist(),
@@ -677,7 +821,8 @@ with tab_saved:
                 st.plotly_chart(radar(details.loc[picked_saved].reset_index(),
                                       "Your saved universities: score on each metric"),
                                 width="stretch")
-                st.caption("A larger shape means higher scores. Compare the metrics you care about.")
+                st.caption("A **larger shape** means **higher scores**. Compare the metrics you "
+                           "care about.")
             elif picked_saved:
                 st.caption("Pick at least two universities to compare their profiles.")
 
@@ -696,7 +841,7 @@ with tab3:
     fig = px.bar(counts.sort_values("universities"), x="universities", y="country", orientation="h",
                  title=f"Top 15 countries in the QS top {n_top}", labels={"country": ""})
     st.plotly_chart(fig, width="stretch")
-    st.caption("A few countries (the United States, the United Kingdom, China) hold a large part of the top places.")
+    st.caption("A few countries (**the US, the UK and China**) hold a large part of the top places.")
 
     l, r = st.columns(2)
     sub = df.dropna(subset=["ar_score", "er_score", "size_label"])
@@ -706,7 +851,8 @@ with tab3:
                      labels={"ar_score": "Academic reputation", "er_score": "Employer reputation",
                              "size_label": "Size"})
     l.plotly_chart(fig, width="stretch")
-    l.caption("Each dot is a university. Hover to see its name. The two reputations move together.")
+    l.caption("Each dot is **one university**. Hover to see its name. The two reputations "
+              "**move together**.")
 
     ranked = df.dropna(subset=["overall_score", "size_label"])
     fig = px.box(ranked, x="size_label", y="overall_score",
@@ -714,14 +860,16 @@ with tab3:
                  title="Overall score by university size (ranked universities only)",
                  labels={"size_label": "Size", "overall_score": "Overall score"})
     r.plotly_chart(fig, width="stretch")
-    r.caption("Size alone does not decide the score: small and extra large universities both reach the top.")
+    r.caption("**Size alone does not decide the score**: small and extra large universities "
+              "both reach the top.")
 
     corr = df[METRIC_COLS + ["overall_score"]].corr()
     names_c = [METRICS.get(c, "Overall score") for c in corr.columns]
     fig = px.imshow(corr.values, x=names_c, y=names_c, text_auto=".1f", zmin=-1, zmax=1,
                     color_continuous_scale="RdYlGn", title="Which scores move together?", aspect="auto")
     st.plotly_chart(fig, width="stretch")
-    st.caption("Green means two scores rise together. Red means one is high when the other is low.")
+    st.caption("**Green** means two scores rise together. **Red** means one is high when the "
+               "other is low.")
 
     st.subheader("Does a better rank mean smaller classes or more international students?")
     metric_choice = st.radio("Metric", ["Faculty/student ratio", "International students"], horizontal=True)
@@ -731,8 +879,9 @@ with tab3:
                      labels={"rank_num": "QS rank (1 = best)", mcol: metric_choice + " score"},
                      title=f"QS rank vs {metric_choice.lower()} score")
     st.plotly_chart(fig, width="stretch")
-    st.caption(f"Correlation between rank number and this score: {sub['rank_num'].corr(sub[mcol]):.2f}. "
-               "A negative number means better-ranked universities score higher.")
+    st.caption(f"Correlation between rank number and this score: "
+               f"**{sub['rank_num'].corr(sub[mcol]):.2f}**. A **negative number** means "
+               "better-ranked universities score higher.")
 
 # ---------------------------------------------------------------
 # TAB 7: ABOUT
