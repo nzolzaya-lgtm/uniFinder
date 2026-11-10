@@ -1,2 +1,5 @@
 # Local user accounts and saved universities (password hashes, personal notes)
 data/users.db
+
+# Real API keys. Only the .example template is committed.
+.streamlit/secrets.toml

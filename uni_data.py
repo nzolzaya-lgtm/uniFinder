@@ -22,6 +22,8 @@ DATA_COLUMNS = [
     "annual_tuition_usd",
     "acceptance_rate",
     "website_url",
+    "source_url",
+    "as_of",
 ]
 
 # Illustrative sample data: roughly the 25th percentile SAT of admitted students,
@@ -148,6 +150,23 @@ SAT_REACH_TOLERANCE = 50
 IELTS_REACH_TOLERANCE = 0.5
 _EPS = 1e-9
 
+# Chance labels for the admissions table. The rule is deliberately simple and is
+# spelled out in the app under the table; it is a rough guide, not a prediction.
+CHANCE_SAFE = "Safe"
+CHANCE_TARGET = "Target"
+CHANCE_REACH = "Reach"
+CHANCE_UNKNOWN = "Unknown"
+CHANCE_SAFE_SAT_MARGIN = 100      # how far above the SAT requirement counts as Safe
+CHANCE_SAFE_IELTS_MARGIN = 1.0    # how many IELTS bands above the requirement count as Safe
+
+# Where the figures come from. The sample numbers are illustrative and their origin
+# is not documented in this repository, so they say "source needed" rather than
+# pointing at a page that may not contain them.
+SAMPLE_SOURCE_URL = "source needed"
+SAMPLE_AS_OF = "source needed"
+SCORECARD_SOURCE_URL = "https://collegescorecard.ed.gov/data/api/"
+SCORECARD_AS_OF = "College Scorecard latest release"
+
 # Official API: https://collegescorecard.ed.gov/data/api/
 SCORECARD_URL = "https://api.data.gov/ed/collegescorecard/v1/schools.json"
 SCORECARD_FIELDS = [
@@ -168,6 +187,8 @@ def sample_universities():
     """Return the built-in fallback dataset as a fresh DataFrame."""
     df = pd.DataFrame(SAMPLE_UNIVERSITIES, columns=DATA_COLUMNS)
     df["acceptance_rate"] = df["acceptance_rate"].astype(float)
+    df["source_url"] = SAMPLE_SOURCE_URL
+    df["as_of"] = SAMPLE_AS_OF
     return df
 
 
@@ -223,6 +244,8 @@ def fetch_scorecard_universities(api_key="DEMO_KEY", max_pages=2, per_page=100):
                 "annual_tuition_usd": tuition,
                 "acceptance_rate": item.get("latest.admissions.admission_rate.overall"),
                 "website_url": url,
+                "source_url": SCORECARD_SOURCE_URL,
+                "as_of": SCORECARD_AS_OF,
             })
         if not records:
             break
@@ -239,6 +262,26 @@ def fetch_scorecard_universities(api_key="DEMO_KEY", max_pages=2, per_page=100):
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.drop_duplicates(subset="name").reset_index(drop=True)
     return df[df["min_sat_overall"].notna()].reset_index(drop=True)
+
+
+def chance_label(sat_margin, ielts_margin):
+    """Safe / Target / Reach / Unknown from the student's margins.
+
+    A negative margin means the published requirement is above the student's score,
+    which makes the university a Reach (an IELTS minimum alone is enough for that).
+    Safe needs every published requirement to be cleared by a comfortable margin,
+    Target means cleared but by less. With no published requirement at all the
+    answer is Unknown: a missing requirement is not evidence of anything.
+    """
+    margins = [(m, CHANCE_SAFE_SAT_MARGIN) if name == "sat" else (m, CHANCE_SAFE_IELTS_MARGIN)
+               for name, m in (("sat", sat_margin), ("ielts", ielts_margin)) if pd.notna(m)]
+    if not margins:
+        return CHANCE_UNKNOWN
+    if any(margin < 0 for margin, _ in margins):
+        return CHANCE_REACH
+    if all(margin >= buffer for margin, buffer in margins):
+        return CHANCE_SAFE
+    return CHANCE_TARGET
 
 
 def find_matches(data, sat_score, ielts_score, max_tuition, countries=None,
@@ -282,5 +325,7 @@ def find_matches(data, sat_score, ielts_score, max_tuition, countries=None,
         keep = meets_sat & meets_ielts
 
     df = df[keep]
+    df["chance"] = [chance_label(sat_margin, ielts_margin)
+                    for sat_margin, ielts_margin in zip(df["sat_margin"], df["ielts_margin"])]
     df = df.sort_values(["annual_tuition_usd", "name"], na_position="last")
     return df.reset_index(drop=True)

@@ -1,4 +1,8 @@
+import glob
 import os
+import re
+from urllib.parse import quote_plus
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -13,6 +17,8 @@ from groq_service import (
     lookup_requirements,
 )
 from uni_data import (
+    CHANCE_SAFE_IELTS_MARGIN,
+    CHANCE_SAFE_SAT_MARGIN,
     IELTS_REACH_TOLERANCE,
     SAT_REACH_TOLERANCE,
     STRICTNESS_REACH,
@@ -190,41 +196,314 @@ RADAR_LABELS = [METRICS[c] for c in METRIC_COLS]
 
 
 # ---------------------------------------------------------------
-# 1. LOAD AND CLEAN DATA
+# 1. LOAD AND CLEAN DATA (newest QS export, read by column name)
 # ---------------------------------------------------------------
-@st.cache_data
-def load_data():
-    path = "qs_2024.xlsx" if os.path.exists("qs_2024.xlsx") else "data/qs_2024.xlsx"
+QS_LINK = "https://www.topuniversities.com/world-university-rankings"
+QS_SEARCH_DIRS = (".", "data")
+
+# Short names that identify the row of column names inside a QS export.
+HEADER_TOKENS = {"institution", "institution name", "rank display", "rank",
+                 "location", "country", "size", "focus", "research",
+                 "ar score", "overall score"}
+
+# Keywords that identify each indicator's SCORE column, matched against the
+# column name and the group label printed above it in the sheet.
+METRIC_COLUMN_KEYWORDS = {
+    "ar_score": ("academic reputation",),
+    "er_score": ("employer reputation",),
+    "fsr_score": ("faculty student", "faculty/student"),
+    "cpf_score": ("citations per faculty", "citations"),
+    "ifr_score": ("international faculty",),
+    "isr_score": ("international students",),
+    "irn_score": ("international research network",),
+    "ger_score": ("employment outcomes",),
+    "sus_score": ("sustainability",),
+}
+
+SIZE_CODES = {"XL": "Extra large", "L": "Large", "M": "Medium", "S": "Small"}
+FOCUS_CODES = {"FC": "Full comprehensive", "CO": "Comprehensive",
+               "FO": "Focused", "SP": "Specialist"}
+RESEARCH_CODES = {"VH": "Very high", "HI": "High", "MD": "Medium", "LO": "Low"}
+
+# Filled by load_data() so the About tab can report what was actually read.
+QS_INFO = {"path": None, "year": None, "previous_path": None, "previous_year": None,
+           "matched_names": 0, "rows": 0, "countries": 0, "notes": []}
+
+
+def _norm(text):
+    """Lower-case text with punctuation collapsed, used for name matching."""
+    return re.sub(r"[^a-z0-9]+", " ", str(text).lower()).strip()
+
+
+def normalise_institution(name):
+    """Match key for a university name: lower case, no spaces or punctuation."""
+    return re.sub(r"[^a-z0-9]+", "", str(name).lower())
+
+
+def _qs_files():
+    """Every qs_*.xlsx in the project folder."""
+    found = []
+    for folder in QS_SEARCH_DIRS:
+        found.extend(glob.glob(os.path.join(folder, "qs_*.xlsx")))
+    return sorted({os.path.normpath(path) for path in found})
+
+
+def _edition_year(path):
+    """Year from a file name such as qs_2027.xlsx (None if there is no year)."""
+    match = re.search(r"(19|20)\d{2}", os.path.basename(path or ""))
+    return int(match.group(0)) if match else None
+
+
+def newest_qs_file():
+    """The newest QS export: highest year in the name, then newest file."""
+    files = _qs_files()
+    if not files:
+        return None
+    return max(files, key=lambda p: (_edition_year(p) or 0, os.path.getmtime(p)))
+
+
+def previous_qs_file(current):
+    """An older QS export to compare ranks with (None when there is only one)."""
+    if not current:
+        return None
+    others = [p for p in _qs_files()
+              if os.path.normpath(p) != os.path.normpath(current)]
+    current_year = _edition_year(current) or 0
+    older = [p for p in others if (_edition_year(p) or 0) < current_year]
+    pick = older or others
+    if not pick:
+        return None
+    return max(pick, key=lambda p: (_edition_year(p) or 0, os.path.getmtime(p)))
+
+
+def _read_qs_sheet(path):
+    """Read one QS export by column NAME and return the cleaned table.
+
+    The sheet starts with a title row and one or two header rows, so the row that
+    holds the short column names is located first. Every column we need is then
+    found by name, which keeps working when a new edition adds columns or uses a
+    different number of header rows. Raises ValueError listing anything missing.
+    """
+    raw = pd.read_excel(path, header=None)
+
+    name_row, hits = None, 0
+    for i in range(min(15, len(raw))):
+        # Distinct names only: some editions repeat "rank" across many columns,
+        # which would otherwise make the short name row outscore the real one.
+        cells = {_norm(v) for v in raw.iloc[i].tolist() if isinstance(v, str)}
+        score = len(cells & HEADER_TOKENS)
+        if score > hits:
+            name_row, hits = i, score
+    if name_row is None or hits < 3:
+        raise ValueError("could not find the row with the column names")
+
+    names = [_norm(v) for v in raw.iloc[name_row].tolist()]
+    labels = [""] * len(names)
+    for row in range(name_row):           # group labels printed above the names
+        for i, value in enumerate(raw.iloc[row].tolist()):
+            if isinstance(value, str) and value.strip():
+                labels[i] += " " + _norm(value)
+    body = raw.iloc[name_row + 1:].reset_index(drop=True)
+
+    def column(index):
+        return body.iloc[:, index].reset_index(drop=True)
+
+    def find(predicate):
+        for i, name in enumerate(names):
+            if predicate(name, labels[i]):
+                return i
+        return None
+
+    def is_metric_column(name, label):
+        """True for an indicator score column (not its rank column)."""
+        return "score" in name and "overall" not in name
+
+    def is_rank_column(name, label):
+        if "score" in name:
+            return False
+        haystack = f"{name} {label}"
+        if any(keyword in haystack
+               for keywords in METRIC_COLUMN_KEYWORDS.values() for keyword in keywords):
+            return False
+        return (name.startswith("rank") or name.endswith("rank")
+                or re.fullmatch(r"20\d\d rank( display)?\d*", name) is not None)
+
+    rank_columns = [i for i, name in enumerate(names) if is_rank_column(name, labels[i])]
+    institution = find(lambda n, l: "institution" in n)
+    country = find(lambda n, l: ("country" in n and "code" not in n)
+                   or ("location" in n and "code" not in n))
+    overall = find(lambda n, l: "overall" in n and "score" in n)
+
+    def code_column(field):
+        return find(lambda n, l: n == field
+                    or (field in n and "score" not in n and "rank" not in n))
+
+    size, focus, research = code_column("size"), code_column("focus"), code_column("research")
+
+    missing = []
+    if institution is None:
+        missing.append("institution name")
+    if country is None:
+        missing.append("country / location")
+    if not rank_columns:
+        missing.append("rank")
+    if overall is None:
+        missing.append("overall score")
+
+    data = {}
+    for metric in METRIC_COLS:
+        keywords = METRIC_COLUMN_KEYWORDS[metric]
+        index = find(lambda n, l, k=keywords: is_metric_column(n, l)
+                     and any(word in f"{n} {l}" for word in k))
+        if index is None:
+            missing.append(METRICS[metric])
+        else:
+            data[metric] = column(index)
+
+    if missing:
+        raise ValueError("missing columns: " + ", ".join(missing))
+
+    df = pd.DataFrame({"institution": column(institution),
+                       "country": column(country),
+                       "size": column(size) if size is not None else "",
+                       "focus": column(focus) if focus is not None else "",
+                       "research": column(research) if research is not None else "",
+                       **data,
+                       "overall_score": column(overall)})
+
+    df = df[df["institution"].notna()]
+    df["institution"] = df["institution"].astype(str).str.strip()
+    df["country"] = df["country"].astype(str).str.strip()
+    df = df[df["institution"] != ""].drop_duplicates(subset="institution")
+
+    # ranks are text ("=76", "1001-1200", "1401+"): keep the label, make a number
+    df["rank_label"] = column(rank_columns[0]).reindex(df.index).astype(str).str.strip()
+    df["rank_num"] = df["rank_label"].str.extract(r"(\d+)")[0].astype(int)
+
+    # scores use "-" for missing: turn into numbers / NaN
+    for c in METRIC_COLS + ["overall_score"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df["size_label"] = df["size"].map(SIZE_CODES)
+    df["focus_label"] = df["focus"].map(FOCUS_CODES)
+    df["research_label"] = df["research"].map(RESEARCH_CODES)
+
+    return df.reset_index(drop=True)
+
+
+def _read_qs_legacy(path):
+    """Positional reader for the 2024 layout, used only if the name-based
+    reader cannot find the columns (it skips the 4 header rows and names the
+    columns by position)."""
     cols = ["rank_2024", "rank_2023", "institution", "country_code", "country",
             "size", "focus", "research", "status",
             "ar_score", "ar_rank", "er_score", "er_rank", "fsr_score", "fsr_rank",
             "cpf_score", "cpf_rank", "ifr_score", "ifr_rank", "isr_score", "isr_rank",
             "irn_score", "irn_rank", "ger_score", "ger_rank", "sus_score", "sus_rank",
             "overall_score"]
-    df = pd.read_excel(path, header=None, skiprows=4, names=cols)
+    try:
+        df = pd.read_excel(path, header=None, skiprows=4, names=cols)
+    except Exception:
+        return None
+    if df["institution"].isna().all():
+        return None
 
     df["institution"] = df["institution"].astype(str).str.strip()
     df["country"] = df["country"].astype(str).str.strip()
     df = df.drop_duplicates(subset="institution")
-
-    # ranks are text ("=76", "1001-1200", "1401+"): keep the label, make a number
-    df["rank_label"] = df["rank_2024"].astype(str)
+    df["rank_label"] = df["rank_2024"].astype(str).str.strip()
     df["rank_num"] = df["rank_label"].str.extract(r"(\d+)")[0].astype(int)
-
-    # scores use "-" for missing: turn into numbers / NaN
     for c in [c for c in df.columns if c.endswith("_score")]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+    df["size_label"] = df["size"].map(SIZE_CODES)
+    df["focus_label"] = df["focus"].map(FOCUS_CODES)
+    df["research_label"] = df["research"].map(RESEARCH_CODES)
+    return df.reset_index(drop=True)
 
-    df["size_label"] = df["size"].map({"XL": "Extra large", "L": "Large", "M": "Medium", "S": "Small"})
-    df["focus_label"] = df["focus"].map({"FC": "Full comprehensive", "CO": "Comprehensive",
-                                         "FO": "Focused", "SP": "Specialist"})
-    df["research_label"] = df["research"].map({"VH": "Very high", "HI": "High",
-                                               "MD": "Medium", "LO": "Low"})
 
-    keep = (["institution", "country", "rank_label", "rank_num",
+@st.cache_data
+def previous_ranks(path):
+    """Rank numbers of one older edition, keyed by normalised university name."""
+    try:
+        old = _read_qs_sheet(path)
+    except Exception:
+        old = _read_qs_legacy(path)
+    if old is None or old.empty:
+        return {}
+    mapping = {}
+    for name, rank in zip(old["institution"], old["rank_num"]):
+        mapping.setdefault(normalise_institution(name), rank)
+    return mapping
+
+
+@st.cache_data
+def load_data(path=None):
+    """Load and clean the newest QS export.
+
+    Adds "rank_prev" and "rank_change" against the previous edition: a positive
+    rank_change means the university moved UP that many places (rank 20 -> 8 is
+    +12). Ranged ranks ("1001-1200", "1401+") and names that are not in the
+    older file stay empty, so the column never fails on an unmatched name.
+    """
+    path = path or newest_qs_file()
+    if path is None:
+        raise FileNotFoundError(
+            "No qs_*.xlsx file was found. Put the QS Excel export in this folder.")
+
+    try:
+        df = _read_qs_sheet(path)
+        note = "read by column name"
+    except ValueError as exc:
+        df = _read_qs_legacy(path)
+        if df is None:
+            raise
+        note = f"used the positional reader ({exc})"
+
+    year = _edition_year(path)
+    previous = previous_qs_file(path)
+    previous_year = _edition_year(previous) if previous else None
+
+    df["rank_prev"] = pd.Series(dtype="float")
+    df["rank_change"] = pd.Series(dtype="float")
+    matched = 0
+    if previous and previous_year and previous_year != year:
+        mapping = previous_ranks(previous)
+        df["rank_prev"] = df["institution"].map(normalise_institution).map(mapping)
+        matched = int(df["rank_prev"].notna().sum())
+        exact = df["rank_label"].str.match(r"^=?\d+$")     # not a range like 1001-1200
+        df["rank_change"] = (df["rank_prev"] - df["rank_num"]).astype(float).where(exact)
+
+    QS_INFO.update({"path": path, "year": year, "previous_path": previous,
+                    "previous_year": previous_year, "matched_names": matched,
+                    "rows": int(len(df)),
+                    "countries": int(df["country"].nunique()),
+                    "notes": [note]})
+
+    keep = (["institution", "country", "rank_label", "rank_num", "rank_prev", "rank_change",
              "size_label", "focus_label", "research_label"]
             + METRIC_COLS + ["overall_score"])
     return df[keep].reset_index(drop=True)
+
+
+def rank_change_caption():
+    """One-line explanation of the rank change column."""
+    if QS_INFO["previous_year"]:
+        return (f"**Rank change** compares with the QS {QS_INFO['previous_year']} edition: "
+                "**▲** moved up, **▼** moved down, **–** unchanged, a ranked range, or "
+                "not in the older table.")
+    return ("**Rank change** needs two QS editions in this folder, so it is empty for now "
+            "(one file found).")
+
+
+def rank_change_text(change):
+    """Arrow label for the rank change: "▲ 12", "▼ 5" or "–"."""
+    if change is None or pd.isna(change):
+        return "–"
+    if change > 0:
+        return f"▲ {int(change)}"
+    if change < 0:
+        return f"▼ {int(abs(change))}"
+    return "–"
 
 
 @st.cache_data
@@ -270,7 +549,55 @@ def radar(rows, title):
     return fig
 
 
-df = load_data()
+def why_match(rows, weights, key_prefix, title="Why this match?"):
+    """Stacked bar that explains one result's match score.
+
+    Each metric adds weight x score / sum(weights of the metrics this university
+    has) points, so the bars always add up to its match score. Metrics without a
+    score are left out of the chart entirely; they are not drawn as zero.
+    """
+    st.subheader(title)
+    name = st.selectbox("Explain one of your results", rows["institution"].tolist(),
+                        key=f"why_{key_prefix}")
+    row = rows[rows["institution"] == name].iloc[0]
+
+    parts = []
+    for col in METRIC_COLS:
+        value = row[col]
+        if pd.isna(value) or not weights.get(col):
+            continue                       # no data, or you gave it no weight
+        parts.append((METRICS[col], float(weights[col]) * float(value)))
+    denominator = sum(float(weights[col]) for col in METRIC_COLS if pd.notna(row[col]))
+    if not parts or denominator == 0:
+        st.info("This university has no scores for the metrics you weighted, "
+                "so there is nothing to break down.")
+        return
+
+    chart = pd.DataFrame([(label, points / denominator) for label, points in parts],
+                         columns=["metric", "points"])
+    chart = chart.sort_values("points", ascending=False).reset_index(drop=True)
+    chart["university"] = ""
+
+    fig = px.bar(chart, x="points", y="university", color="metric", orientation="h",
+                 title=f"How {name} earns its match score",
+                 labels={"points": "Points added to the match score", "university": ""})
+    fig.update_layout(barmode="stack", height=260,
+                      legend=dict(orientation="h", y=-0.35),
+                      margin=dict(l=10, r=10, t=50, b=10))
+    st.plotly_chart(fig, width="stretch")
+
+    biggest = chart.iloc[0]
+    st.caption(f"**{biggest['metric']}** adds the most to this match: "
+               f"**{biggest['points']:.1f} points**. The bars add up to the match score "
+               f"of **{chart['points'].sum():.1f}**. Metrics with no data are left out of "
+               "the chart, not counted as zero.")
+
+
+try:
+    df = load_data()
+except Exception as exc:                     # no QS file, or an unexpected sheet layout
+    st.error(f"Could not read the QS data file: {exc}")
+    st.stop()
 Z = standardized_profiles(df)
 
 # ---------------------------------------------------------------
@@ -445,11 +772,16 @@ with tab1:
                 right.caption("A **larger shape** means a **higher score**. Look for the metrics "
                              "you care about most.")
 
-            show = top[["institution", "country", "rank_label", "size_label",
+            show = top[["institution", "country", "rank_label", "rank_change", "size_label",
                         "focus_label", "match_score"]].rename(columns={
                 "institution": "University", "country": "Country", "rank_label": "QS rank",
-                "size_label": "Size", "focus_label": "Focus", "match_score": "Match score"})
+                "size_label": "Size", "focus_label": "Focus", "match_score": "Match score",
+                "rank_change": "Rank change"})
+            show["Rank change"] = show["Rank change"].map(rank_change_text)
             st.dataframe(show, width="stretch", hide_index=True)
+            st.caption(rank_change_caption())
+
+            why_match(top, WEIGHTS, "finder")
 
             save_controls(top, "finder", "Finder", "match_score")
 
@@ -569,13 +901,22 @@ with tab_uni:
             lambda v: f"{v:+.1f}" if pd.notna(v) else "—")
 
         st.dataframe(
-            matches[["name", "country", "min_sat_overall", "SAT delta", "min_ielts_overall",
-                     "IELTS delta", "annual_tuition_usd", "acceptance_rate_pct",
-                     "website_url"]],
+            matches[["name", "chance", "country", "min_sat_overall", "SAT delta",
+                     "min_ielts_overall", "IELTS delta", "annual_tuition_usd",
+                     "acceptance_rate_pct", "website_url", "source_url", "as_of"]],
             hide_index=True,
             width="stretch",
             column_config={
                 "name": st.column_config.TextColumn("University", width="medium"),
+                "chance": st.column_config.TextColumn(
+                    "Chance", width="small",
+                    help="A rough guide from the published requirements, not a prediction: "
+                         f"Reach = a published requirement is above your score; "
+                         f"Target = you clear every published requirement, but by less than "
+                         f"{CHANCE_SAFE_SAT_MARGIN} SAT points or "
+                         f"{CHANCE_SAFE_IELTS_MARGIN} IELTS bands; "
+                         f"Safe = you clear every published requirement by at least that much; "
+                         "Unknown = no requirement is published, so nothing can be judged."),
                 "country": "Country",
                 "min_sat_overall": st.column_config.NumberColumn(
                     "SAT requirement", format="%d",
@@ -594,10 +935,24 @@ with tab_uni:
                 "acceptance_rate_pct": st.column_config.NumberColumn(
                     "Acceptance rate", format="%.0f%%"),
                 "website_url": st.column_config.LinkColumn("Website", display_text="Visit site"),
+                "source_url": st.column_config.TextColumn(
+                    "Figures from", width="medium",
+                    help="Where the SAT, IELTS and tuition numbers in this row come from. "
+                         "\"source needed\" means the app cannot name a source for them."),
+                "as_of": st.column_config.TextColumn("As of", width="small"),
             },
         )
+        st.caption("**Tuition and test scores are estimates.** Check the university's official "
+                   "website.")
         st.caption("Sorted by **annual tuition**, cheapest first. Click a column header to "
                    "re-sort. A **dash (-)** means the requirement is not published.")
+        st.caption(
+            "**Chance** follows one fixed rule: **Reach** when a published requirement is above "
+            "your score (an IELTS minimum alone is enough for that); **Target** when you clear "
+            f"every published requirement but by less than {CHANCE_SAFE_SAT_MARGIN} SAT points "
+            f"or {CHANCE_SAFE_IELTS_MARGIN} IELTS bands; **Safe** when you clear every published "
+            "requirement by at least that much; **Unknown** when no requirement is published. "
+            "**This is a rough guide, not a prediction of admission.**")
 
 # ---------------------------------------------------------------
 # TAB 3: REQUIREMENT LOOKUP (GROQ)
@@ -646,8 +1001,14 @@ with tab_req:
                 st.caption("Add a Groq API key to extract requirements for universities "
                            "outside the offline database.")
         else:
-            source_label = (f"Groq · {GROQ_MODEL}" if source == GROQ_SOURCE
-                            else "Bundled offline database")
+            if source == GROQ_SOURCE:
+                source_label = f"Groq · {GROQ_MODEL}"
+                trust = (f"**AI-generated** by Groq `{GROQ_MODEL}` — verify on the official "
+                         "website before you rely on these numbers.")
+            else:
+                source_label = "Bundled offline database"
+                trust = ("**Bundled offline data** (not AI-generated, not live) — verify on the "
+                         "official website before you rely on these numbers.")
             with st.container(border=True):
                 st.subheader(record.get("university") or active_query)
                 st.caption(" · ".join(
@@ -693,8 +1054,10 @@ with tab_req:
                 if missing:
                     st.caption("Not published in this answer: " + ", ".join(missing) + ".")
 
-            st.caption("These figures are AI-extracted or bundled estimates. Confirm them on "
-                       "the university's admissions page before applying.")
+            st.caption(trust)
+            search_url = "https://www.google.com/search?q=" + quote_plus(
+                f"{record.get('university') or active_query} admission requirements")
+            st.markdown(f"[Check the official admission requirements on Google]({search_url})")
 
 # ---------------------------------------------------------------
 # TAB 4: SIMILAR
@@ -739,10 +1102,13 @@ with tab2:
         compare = pd.concat([df.loc[[idx]], out.head(2)])
         r.plotly_chart(radar(compare, "Your university vs its 2 closest matches"), width="stretch")
         r.caption("**Shapes that overlap closely** show universities with a similar profile.")
-        st.dataframe(out[["institution", "country", "rank_label", "size_label", "similarity"]].rename(
+        similar_show = out[["institution", "country", "rank_label", "rank_change",
+                            "size_label", "similarity"]].rename(
             columns={"institution": "University", "country": "Country", "rank_label": "QS rank",
-                     "size_label": "Size", "similarity": "Similarity"}),
-            width="stretch", hide_index=True)
+                     "size_label": "Size", "similarity": "Similarity",
+                     "rank_change": "Rank change"})
+        similar_show["Rank change"] = similar_show["Rank change"].map(rank_change_text)
+        st.dataframe(similar_show, width="stretch", hide_index=True)
 
         save_controls(out, "similar", f"Similar to {liked}", "similarity")
 
@@ -887,19 +1253,34 @@ with tab3:
 # TAB 7: ABOUT
 # ---------------------------------------------------------------
 with tab4:
-    st.markdown("""
+    about_file = QS_INFO["path"] or "the newest QS Excel export"
+    about_year = QS_INFO["year"]
+    about_title = (f"QS World University Rankings {about_year}" if about_year
+                   else "QS World University Rankings")
+    if QS_INFO["previous_year"]:
+        about_prev = (f"**Rank change** compares with the QS {QS_INFO['previous_year']} "
+                      f"edition in `{QS_INFO['previous_path']}`: "
+                      f"{QS_INFO['matched_names']:,} of {QS_INFO['rows']:,} university "
+                      "names matched.")
+    else:
+        about_prev = ("**Rank change** needs a second QS edition in this folder; with one "
+                      "file it stays empty.")
+    st.markdown(f"""
 ### About the data
-- **Source:** QS World University Rankings 2024, official results table (Excel), Quacquarelli Symonds.
-- **Link:** https://www.topuniversities.com/world-university-rankings
-- **Size:** 1,498 universities in 104 countries, with 9 indicator scores and an overall score.
-
+- **Source:** {about_title}, official results table (Excel, `{about_file}`), Quacquarelli Symonds.
+- **Link:** {QS_LINK}
+- **Loaded:** {QS_INFO['rows']:,} universities in {QS_INFO['countries']} countries, with 9 indicator
+  scores and an overall score.
+- {about_prev}
+""")
+    st.markdown("""
 ### The 9 scores (0-100)
 Academic reputation, employer reputation, faculty/student ratio, citations per faculty,
 international faculty, international students, international research network,
 employment outcomes, and sustainability.
 
 ### Cleaning steps
-1. Skipped the 4 header rows in the Excel file and gave clear column names.
+1. Located the row that holds the column names (the title rows above it change between editions) and read every column by its name, not its position.
 2. Checked for duplicate university names (none found) and removed extra spaces.
 3. Turned text ranks (`=76`, `1001-1200`, `1401+`) into a number, and kept the original text for display.
 4. Turned `-` into missing values so scores are real numbers.
