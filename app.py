@@ -196,7 +196,7 @@ RADAR_LABELS = [METRICS[c] for c in METRIC_COLS]
 
 
 # ---------------------------------------------------------------
-# 1. LOAD AND CLEAN DATA (newest QS export, read by column name)
+# 1. LOAD AND CLEAN DATA (QS 2024 export, read by column name)
 # ---------------------------------------------------------------
 QS_LINK = "https://www.topuniversities.com/world-university-rankings"
 QS_SEARCH_DIRS = (".", "data")
@@ -235,9 +235,65 @@ def _norm(text):
     return re.sub(r"[^a-z0-9]+", " ", str(text).lower()).strip()
 
 
+# Names that QS writes differently from the bundled sample. Every QS name here was
+# checked against the loaded table; a name that is not in the file is ignored rather
+# than guessed, so the alias can never point at a university that is not there.
+QS_NAME_ALIASES = {
+    "University College London": "UCL",
+}
+
+# The edition this app is built on. A second workbook only feeds the rank change.
+QS_DEFAULT_FILE = "qs_2024.xlsx"
+
+
 def normalise_institution(name):
-    """Match key for a university name: lower case, no spaces or punctuation."""
-    return re.sub(r"[^a-z0-9]+", "", str(name).lower())
+    """Tolerant match key for a university name.
+
+    Lower case, text in parentheses dropped, punctuation turned into spaces, and a
+    leading "the" removed, so "ETH Zurich" and "ETH Zurich - Swiss Federal Institute
+    of Technology" end up as prefixes of each other.
+    """
+    text = re.sub(r"\([^)]*\)", " ", str(name).lower())
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[4:] if text.startswith("the ") else text
+
+
+def build_name_index(pairs):
+    """Normalised-name lookup for (name, value) pairs.
+
+    Two different rows can normalise to the same key ("Soochow University" and
+    "Soochow University (Taiwan)"), so a shared key is dropped instead of letting one
+    row answer for both.
+    """
+    grouped = {}
+    for name, value in pairs:
+        grouped.setdefault(normalise_institution(name), []).append(value)
+    return {key: values[0] for key, values in grouped.items() if len(set(values)) == 1}
+
+
+def match_institution(name, mapping):
+    """Value for one name: exact key, then a confirmed alias, then a prefix match.
+
+    ``mapping`` maps normalised names to values. A prefix match is accepted only when
+    one candidate is uniquely the closest, so "University of Michigan" finds
+    "University of Michigan-Ann Arbor" but an ambiguous prefix matches nothing.
+    """
+    key = normalise_institution(name)
+    if not key:
+        return None
+    if key in mapping:
+        return mapping[key]
+    alias = QS_NAME_ALIASES.get(str(name))
+    if alias and normalise_institution(alias) in mapping:
+        return mapping[normalise_institution(alias)]
+    hits = [candidate for candidate in mapping
+            if candidate.startswith(key) or key.startswith(candidate)]
+    if not hits:
+        return None
+    shortest = min(len(candidate) for candidate in hits)
+    best = [candidate for candidate in hits if len(candidate) == shortest]
+    return mapping[best[0]] if len(best) == 1 else None
 
 
 def _qs_files():
@@ -252,6 +308,12 @@ def _edition_year(path):
     """Year from a file name such as qs_2027.xlsx (None if there is no year)."""
     match = re.search(r"(19|20)\d{2}", os.path.basename(path or ""))
     return int(match.group(0)) if match else None
+
+
+def default_qs_file():
+    """The workbook the app loads: qs_2024.xlsx when it is here, else the newest file."""
+    preferred = [p for p in _qs_files() if os.path.basename(p) == QS_DEFAULT_FILE]
+    return preferred[0] if preferred else newest_qs_file()
 
 
 def newest_qs_file():
@@ -430,22 +492,19 @@ def previous_ranks(path):
         old = _read_qs_legacy(path)
     if old is None or old.empty:
         return {}
-    mapping = {}
-    for name, rank in zip(old["institution"], old["rank_num"]):
-        mapping.setdefault(normalise_institution(name), rank)
-    return mapping
+    return build_name_index(zip(old["institution"], old["rank_num"]))
 
 
 @st.cache_data
 def load_data(path=None):
-    """Load and clean the newest QS export.
+    """Load and clean the QS export (the 2024 edition unless another file is passed).
 
     Adds "rank_prev" and "rank_change" against the previous edition: a positive
     rank_change means the university moved UP that many places (rank 20 -> 8 is
     +12). Ranged ranks ("1001-1200", "1401+") and names that are not in the
     older file stay empty, so the column never fails on an unmatched name.
     """
-    path = path or newest_qs_file()
+    path = path or default_qs_file()
     if path is None:
         raise FileNotFoundError(
             "No qs_*.xlsx file was found. Put the QS Excel export in this folder.")
@@ -468,7 +527,7 @@ def load_data(path=None):
     matched = 0
     if previous and previous_year and previous_year != year:
         mapping = previous_ranks(previous)
-        df["rank_prev"] = df["institution"].map(normalise_institution).map(mapping)
+        df["rank_prev"] = [match_institution(name, mapping) for name in df["institution"]]
         matched = int(df["rank_prev"].notna().sum())
         exact = df["rank_label"].str.match(r"^=?\d+$")     # not a range like 1001-1200
         df["rank_change"] = (df["rank_prev"] - df["rank_num"]).astype(float).where(exact)
@@ -486,13 +545,10 @@ def load_data(path=None):
 
 
 def rank_change_caption():
-    """One-line explanation of the rank change column."""
-    if QS_INFO["previous_year"]:
-        return (f"**Rank change** compares with the QS {QS_INFO['previous_year']} edition: "
-                "**▲** moved up, **▼** moved down, **–** unchanged, a ranked range, or "
-                "not in the older table.")
-    return ("**Rank change** needs two QS editions in this folder, so it is empty for now "
-            "(one file found).")
+    """One-line explanation of the rank change column (only shown with two editions)."""
+    return (f"**Rank change** compares with the QS {QS_INFO['previous_year']} edition: "
+            "**▲** moved up, **▼** moved down, **–** unchanged, a ranked range, or "
+            "not in the older table.")
 
 
 def rank_change_text(change):
@@ -772,14 +828,18 @@ with tab1:
                 right.caption("A **larger shape** means a **higher score**. Look for the metrics "
                              "you care about most.")
 
-            show = top[["institution", "country", "rank_label", "rank_change", "size_label",
-                        "focus_label", "match_score"]].rename(columns={
+            show_cols = ["institution", "country", "rank_label"]
+            if QS_INFO["previous_year"]:
+                show_cols.append("rank_change")
+            show = top[show_cols + ["size_label", "focus_label", "match_score"]].rename(columns={
                 "institution": "University", "country": "Country", "rank_label": "QS rank",
                 "size_label": "Size", "focus_label": "Focus", "match_score": "Match score",
                 "rank_change": "Rank change"})
-            show["Rank change"] = show["Rank change"].map(rank_change_text)
+            if QS_INFO["previous_year"]:
+                show["Rank change"] = show["Rank change"].map(rank_change_text)
             st.dataframe(show, width="stretch", hide_index=True)
-            st.caption(rank_change_caption())
+            if QS_INFO["previous_year"]:
+                st.caption(rank_change_caption())
 
             why_match(top, WEIGHTS, "finder")
 
@@ -855,6 +915,12 @@ with tab_uni:
     matches = find_matches(uni_df, sat_score, ielts_score, max_budget,
                            target_countries, strictness)
 
+    # Put each admission record next to its entry in the loaded QS table. Names that
+    # are not in that table stay blank instead of being forced onto a near match.
+    qs_ranks = build_name_index(zip(df["institution"], df["rank_label"]))
+    matches = matches.assign(
+        qs_rank=[match_institution(name, qs_ranks) for name in matches["name"]])
+
     st.divider()
     m1, m2, m3 = st.columns(3)
     m1.metric("Total matches found", f"{len(matches):,}")
@@ -901,7 +967,7 @@ with tab_uni:
             lambda v: f"{v:+.1f}" if pd.notna(v) else "—")
 
         st.dataframe(
-            matches[["name", "chance", "country", "min_sat_overall", "SAT delta",
+            matches[["name", "chance", "country", "qs_rank", "min_sat_overall", "SAT delta",
                      "min_ielts_overall", "IELTS delta", "annual_tuition_usd",
                      "acceptance_rate_pct", "website_url", "source_url", "as_of"]],
             hide_index=True,
@@ -918,6 +984,11 @@ with tab_uni:
                          f"Safe = you clear every published requirement by at least that much; "
                          "Unknown = no requirement is published, so nothing can be judged."),
                 "country": "Country",
+                "qs_rank": st.column_config.TextColumn(
+                    f"QS {QS_INFO['year']} rank" if QS_INFO["year"] else "QS rank",
+                    width="small",
+                    help="The university's rank in the loaded QS table. A dash means the "
+                         "name was not found there."),
                 "min_sat_overall": st.column_config.NumberColumn(
                     "SAT requirement", format="%d",
                     help="Required SAT overall score (25th percentile, or the average of admitted "
@@ -1102,12 +1173,15 @@ with tab2:
         compare = pd.concat([df.loc[[idx]], out.head(2)])
         r.plotly_chart(radar(compare, "Your university vs its 2 closest matches"), width="stretch")
         r.caption("**Shapes that overlap closely** show universities with a similar profile.")
-        similar_show = out[["institution", "country", "rank_label", "rank_change",
-                            "size_label", "similarity"]].rename(
+        similar_cols = ["institution", "country", "rank_label"]
+        if QS_INFO["previous_year"]:
+            similar_cols.append("rank_change")
+        similar_show = out[similar_cols + ["size_label", "similarity"]].rename(
             columns={"institution": "University", "country": "Country", "rank_label": "QS rank",
                      "size_label": "Size", "similarity": "Similarity",
                      "rank_change": "Rank change"})
-        similar_show["Rank change"] = similar_show["Rank change"].map(rank_change_text)
+        if QS_INFO["previous_year"]:
+            similar_show["Rank change"] = similar_show["Rank change"].map(rank_change_text)
         st.dataframe(similar_show, width="stretch", hide_index=True)
 
         save_controls(out, "similar", f"Similar to {liked}", "similarity")
@@ -1263,8 +1337,8 @@ with tab4:
                       f"{QS_INFO['matched_names']:,} of {QS_INFO['rows']:,} university "
                       "names matched.")
     else:
-        about_prev = ("**Rank change** needs a second QS edition in this folder; with one "
-                      "file it stays empty.")
+        about_prev = (f"**This app uses the {about_title} results.** No second edition is "
+                      "loaded, so no rank-change column is shown.")
     st.markdown(f"""
 ### About the data
 - **Source:** {about_title}, official results table (Excel, `{about_file}`), Quacquarelli Symonds.
@@ -1295,6 +1369,7 @@ A university needs scores for at least 60% of your total weight to appear, so it
 - Only about 600 universities have an overall score, so the finder uses the indicator scores.
 - QS measures reputation and research more than teaching quality.
 - Mongolian universities are not in this table.
+- Newer QS editions exist; this app uses the 2024 edition.
 
 ### Accounts and privacy
 - Accounts and saved universities are for this class project only: they are not a real service.

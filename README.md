@@ -5,6 +5,9 @@ universities that fit their interests, their exam scores and their budget.
 
 **The question it answers:** *Which universities actually fit me, and why?*
 
+**Data:** the QS World University Rankings **2024** official results table (`qs_2024.xlsx`). The app
+reports the exact edition, university count and country count it loaded on the *About the data* tab.
+
 **Live app:** <PASTE STREAMLIT CLOUD URL HERE>
 
 ## Screenshots
@@ -30,8 +33,9 @@ universities that fit their interests, their exam scores and their budget.
     file is in the project.
 - **University Finder (admissions)** — check SAT, IELTS and tuition against admission requirements,
   with a strictness setting and a **Chance** column (Safe / Target / Reach / Unknown) that follows
-  one stated rule and is a rough guide, not a prediction. Uses the bundled sample, or live US data
-  from the College Scorecard API.
+  one stated rule and is a rough guide, not a prediction, plus the university's QS rank when the
+  name is in the loaded table. Uses the bundled sample, or live US data from the College Scorecard
+  API.
 - **Requirement lookup** — type any university and get a requirement record for it (AI-generated
   through Groq, with a bundled offline database as the fallback).
 - **Find similar universities** — pick a university you like and see the closest profiles by
@@ -48,7 +52,7 @@ universities that fit their interests, their exam scores and their budget.
 
 | Data | Source | Status |
 | --- | --- | --- |
-| QS indicator scores, ranks, country, size, focus, research intensity | QS World University Rankings, official results table (Excel) — <https://www.topuniversities.com/world-university-rankings> | File in the project folder (`qs_*.xlsx`); the newest edition is used automatically |
+| QS indicator scores, ranks, country, size, focus, research intensity | QS World University Rankings **2024**, official results table (Excel) — <https://www.topuniversities.com/world-university-rankings> | `qs_2024.xlsx` in the project folder; this app is pinned to the 2024 edition |
 | Rank change | The previous edition's `qs_*.xlsx` file | Only shown when two editions are present |
 | Sample SAT / IELTS / tuition / acceptance rates | Bundled in `uni_data.py` | **source needed** — the figures are illustrative and their origin is not documented in this repository |
 | Offline requirement records | Bundled in `fallback_requirements.json` | **source needed** |
@@ -69,9 +73,9 @@ streamlit run app.py
 
 The app opens at <http://localhost:8501>.
 
-The QS workbook must be called `qs_YYYY.xlsx` and sit in the project folder (or in `data/`). Drop the
-next edition next to the current one and restart the app: the newest year is picked up automatically,
-and the older file is then used for the rank-change column.
+The QS workbook must be called `qs_YYYY.xlsx` and sit in the project folder (or in `data/`). This app
+uses the **2024 edition** (`qs_2024.xlsx`) on purpose. A second workbook in the folder is only used
+to fill the rank-change column; with a single edition that column is hidden.
 
 ## Secrets
 
@@ -95,6 +99,7 @@ data.
 - QS measures reputation and research more than teaching quality.
 - Admissions figures are approximate, and the sample data is illustrative rather than official.
 - AI answers can be wrong; verify them on the official website.
+- Newer QS editions exist; this app uses the 2024 edition.
 - Accounts and saved universities are a class project, not a real service. Saved lists live in a
   local SQLite file (`data/users.db`) that is not committed.
 - **On free Streamlit Community Cloud the disk is temporary:** the app can restart, sleep after
