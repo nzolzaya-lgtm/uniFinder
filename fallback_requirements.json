@@ -1,0 +1,444 @@
+{
+  "note": "Bundled illustrative requirements for offline lookups. Values are approximate; verify them with each university before applying.",
+  "universities": [
+    {
+      "name": "Massachusetts Institute of Technology",
+      "aliases": [
+        "MIT"
+      ],
+      "country": "United States",
+      "sat_min": 1510,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 61990,
+      "acceptance_rate": 0.04
+    },
+    {
+      "name": "Harvard University",
+      "aliases": [
+        "Harvard"
+      ],
+      "country": "United States",
+      "sat_min": 1520,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 59076,
+      "acceptance_rate": 0.03
+    },
+    {
+      "name": "Stanford University",
+      "aliases": [
+        "Stanford"
+      ],
+      "country": "United States",
+      "sat_min": 1520,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 65127,
+      "acceptance_rate": 0.04
+    },
+    {
+      "name": "California Institute of Technology",
+      "aliases": [
+        "Caltech"
+      ],
+      "country": "United States",
+      "sat_min": 1540,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 63255,
+      "acceptance_rate": 0.03
+    },
+    {
+      "name": "Columbia University",
+      "aliases": [
+        "Columbia"
+      ],
+      "country": "United States",
+      "sat_min": 1500,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 68400,
+      "acceptance_rate": 0.04
+    },
+    {
+      "name": "New York University",
+      "aliases": [
+        "NYU"
+      ],
+      "country": "United States",
+      "sat_min": 1450,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 60438,
+      "acceptance_rate": 0.12
+    },
+    {
+      "name": "University of California, Berkeley",
+      "aliases": [
+        "UC Berkeley",
+        "Berkeley",
+        "Cal"
+      ],
+      "country": "United States",
+      "sat_min": 1450,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 49350,
+      "acceptance_rate": 0.11
+    },
+    {
+      "name": "University of Michigan",
+      "aliases": [
+        "UMich",
+        "Michigan"
+      ],
+      "country": "United States",
+      "sat_min": 1430,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 60500,
+      "acceptance_rate": 0.18
+    },
+    {
+      "name": "University of Texas at Austin",
+      "aliases": [
+        "UT Austin"
+      ],
+      "country": "United States",
+      "sat_min": 1350,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 42700,
+      "acceptance_rate": 0.29
+    },
+    {
+      "name": "University of Washington",
+      "aliases": [
+        "UW",
+        "University of Washington Seattle"
+      ],
+      "country": "United States",
+      "sat_min": 1400,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 43200,
+      "acceptance_rate": 0.48
+    },
+    {
+      "name": "Purdue University",
+      "aliases": [
+        "Purdue"
+      ],
+      "country": "United States",
+      "sat_min": 1330,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 28794,
+      "acceptance_rate": 0.53
+    },
+    {
+      "name": "Arizona State University",
+      "aliases": [
+        "ASU"
+      ],
+      "country": "United States",
+      "sat_min": 1240,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.0,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 33000,
+      "acceptance_rate": 0.88
+    },
+    {
+      "name": "University of Oxford",
+      "aliases": [
+        "Oxford"
+      ],
+      "country": "United Kingdom",
+      "sat_min": 1500,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.5,
+      "ielts_min_listening": 7.0,
+      "ielts_min_reading": 7.0,
+      "ielts_min_writing": 7.0,
+      "ielts_min_speaking": 7.0,
+      "annual_tuition_usd": 39000,
+      "acceptance_rate": 0.17
+    },
+    {
+      "name": "University of Cambridge",
+      "aliases": [
+        "Cambridge"
+      ],
+      "country": "United Kingdom",
+      "sat_min": 1500,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.5,
+      "ielts_min_listening": 7.0,
+      "ielts_min_reading": 7.0,
+      "ielts_min_writing": 7.0,
+      "ielts_min_speaking": 7.0,
+      "annual_tuition_usd": 37000,
+      "acceptance_rate": 0.18
+    },
+    {
+      "name": "Imperial College London",
+      "aliases": [
+        "Imperial"
+      ],
+      "country": "United Kingdom",
+      "sat_min": 1480,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": 6.5,
+      "ielts_min_reading": 6.5,
+      "ielts_min_writing": 6.5,
+      "ielts_min_speaking": 6.5,
+      "annual_tuition_usd": 43000,
+      "acceptance_rate": 0.14
+    },
+    {
+      "name": "University College London",
+      "aliases": [
+        "UCL"
+      ],
+      "country": "United Kingdom",
+      "sat_min": 1450,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": 6.5,
+      "ielts_min_reading": 6.5,
+      "ielts_min_writing": 6.5,
+      "ielts_min_speaking": 6.5,
+      "annual_tuition_usd": 35000,
+      "acceptance_rate": 0.13
+    },
+    {
+      "name": "University of Edinburgh",
+      "aliases": [
+        "Edinburgh"
+      ],
+      "country": "United Kingdom",
+      "sat_min": 1420,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 5.5,
+      "ielts_min_reading": 5.5,
+      "ielts_min_writing": 5.5,
+      "ielts_min_speaking": 5.5,
+      "annual_tuition_usd": 32000,
+      "acceptance_rate": 0.41
+    },
+    {
+      "name": "University of Toronto",
+      "aliases": [
+        "U of T",
+        "Toronto"
+      ],
+      "country": "Canada",
+      "sat_min": 1450,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 45000,
+      "acceptance_rate": 0.43
+    },
+    {
+      "name": "University of British Columbia",
+      "aliases": [
+        "UBC"
+      ],
+      "country": "Canada",
+      "sat_min": 1400,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 41000,
+      "acceptance_rate": 0.52
+    },
+    {
+      "name": "McGill University",
+      "aliases": [
+        "McGill"
+      ],
+      "country": "Canada",
+      "sat_min": 1400,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 27000,
+      "acceptance_rate": 0.46
+    },
+    {
+      "name": "University of Melbourne",
+      "aliases": [
+        "Melbourne",
+        "UniMelb"
+      ],
+      "country": "Australia",
+      "sat_min": 1400,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 34000,
+      "acceptance_rate": 0.7
+    },
+    {
+      "name": "University of Sydney",
+      "aliases": [
+        "Sydney"
+      ],
+      "country": "Australia",
+      "sat_min": 1380,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 36000,
+      "acceptance_rate": 0.72
+    },
+    {
+      "name": "National University of Singapore",
+      "aliases": [
+        "NUS"
+      ],
+      "country": "Singapore",
+      "sat_min": 1450,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 29000,
+      "acceptance_rate": 0.1
+    },
+    {
+      "name": "ETH Zurich",
+      "aliases": [
+        "ETH",
+        "ETH Zürich"
+      ],
+      "country": "Switzerland",
+      "sat_min": 1440,
+      "sat_recommended": null,
+      "ielts_min_overall": 7.0,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 1600,
+      "acceptance_rate": 0.27
+    },
+    {
+      "name": "Delft University of Technology",
+      "aliases": [
+        "TU Delft"
+      ],
+      "country": "Netherlands",
+      "sat_min": 1350,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 18000,
+      "acceptance_rate": 0.45
+    },
+    {
+      "name": "University of Amsterdam",
+      "aliases": [
+        "UvA"
+      ],
+      "country": "Netherlands",
+      "sat_min": 1330,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": null,
+      "ielts_min_reading": null,
+      "ielts_min_writing": null,
+      "ielts_min_speaking": null,
+      "annual_tuition_usd": 16000,
+      "acceptance_rate": 0.53
+    },
+    {
+      "name": "Trinity College Dublin",
+      "aliases": [
+        "TCD"
+      ],
+      "country": "Ireland",
+      "sat_min": 1380,
+      "sat_recommended": null,
+      "ielts_min_overall": 6.5,
+      "ielts_min_listening": 6.0,
+      "ielts_min_reading": 6.0,
+      "ielts_min_writing": 6.0,
+      "ielts_min_speaking": 6.0,
+      "annual_tuition_usd": 26000,
+      "acceptance_rate": 0.34
+    }
+  ]
+}
